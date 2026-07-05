@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <time.h>
 #include <ctype.h>
 #include <limits.h>
 #ifdef HAVE_PWD_H
@@ -210,6 +211,7 @@ struct client {
 	struct pw_context *context;
 
 	struct spa_source *source;
+	struct spa_source *timer;
 
 	struct pw_protocol_native_connection *connection;
 	struct spa_hook conn_listener;
@@ -223,6 +225,36 @@ struct client {
 	unsigned int need_flush:1;
 	unsigned int paused:1;
 };
+
+/* Connection handshake timeout in milliseconds */
+#define CONNECT_TIMEOUT_MS 5000
+
+static void on_connect_timeout(void *data, uint64_t expirations)
+{
+	struct client *impl = data;
+	struct pw_core *this = impl->this.core;
+	struct pw_proxy *core_proxy = (struct pw_proxy*)this;
+	struct pw_context *context = pw_core_get_context(this);
+	struct pw_loop *loop = pw_context_get_main_loop(context);
+
+	if (impl->connected || impl->disconnecting)
+		return;
+
+	pw_log_warn("%p: connection handshake timed out after %d ms",
+			impl, CONNECT_TIMEOUT_MS);
+
+	/* Clean up IO source */
+	if (impl->source) {
+		pw_loop_destroy_source(loop, impl->source);
+		impl->source = NULL;
+	}
+	impl->timer = NULL;
+
+	/* Notify connection error to core */
+	pw_proxy_notify(core_proxy,
+			struct pw_core_events, error, 0, 0,
+			0, -ETIMEDOUT, "connection handshake timeout");
+}
 
 static void client_unref(struct client *impl)
 {
@@ -1205,17 +1237,27 @@ error:
 static int impl_connect_fd(struct pw_protocol_client *client, int fd, bool do_close)
 {
 	struct client *impl = SPA_CONTAINER_OF(client, struct client, this);
+	struct pw_context *context = pw_core_get_context(impl->this.core);
+	struct pw_loop *loop = pw_context_get_main_loop(context);
+	struct timespec value;
 
 	impl->connected = false;
 	impl->disconnecting = false;
 
 	pw_protocol_native_connection_set_fd(impl->connection, fd);
-	impl->source = pw_loop_add_io(impl->context->main_loop,
+	impl->source = pw_loop_add_io(loop,
 					fd,
 					SPA_IO_IN | SPA_IO_OUT | SPA_IO_HUP | SPA_IO_ERR,
 					do_close, on_remote_data, impl);
 	if (impl->source == NULL)
 		return -errno;
+
+	/* Add connection handshake timeout */
+	value.tv_sec = CONNECT_TIMEOUT_MS / 1000;
+	value.tv_nsec = (CONNECT_TIMEOUT_MS % 1000) * 1000000;
+	impl->timer = pw_loop_add_timer(loop, on_connect_timeout, impl);
+	if (impl->timer != NULL)
+		pw_loop_update_timer(loop, impl->timer, &value, NULL, true);
 
 	return 0;
 }
@@ -1229,6 +1271,11 @@ static void impl_disconnect(struct pw_protocol_client *client)
 	if (impl->source)
                 pw_loop_destroy_source(impl->context->main_loop, impl->source);
 	impl->source = NULL;
+
+	if (impl->timer) {
+		pw_loop_destroy_source(impl->context->main_loop, impl->timer);
+		impl->timer = NULL;
+	}
 
 	pw_protocol_native_connection_set_fd(impl->connection, -1);
 }
