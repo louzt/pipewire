@@ -248,7 +248,10 @@ static void on_connect_timeout(void *data, uint64_t expirations)
 		pw_loop_destroy_source(loop, impl->source);
 		impl->source = NULL;
 	}
-	impl->timer = NULL;
+	if (impl->timer) {
+		pw_loop_destroy_source(loop, impl->timer);
+		impl->timer = NULL;
+	}
 
 	/* Notify connection error to core */
 	pw_proxy_notify(core_proxy,
@@ -1257,7 +1260,7 @@ static int impl_connect_fd(struct pw_protocol_client *client, int fd, bool do_cl
 	value.tv_nsec = (CONNECT_TIMEOUT_MS % 1000) * 1000000;
 	impl->timer = pw_loop_add_timer(loop, on_connect_timeout, impl);
 	if (impl->timer != NULL)
-		pw_loop_update_timer(loop, impl->timer, &value, NULL, true);
+		pw_loop_update_timer(loop, impl->timer, &value, NULL, false);
 
 	return 0;
 }
