@@ -28,7 +28,7 @@ jobs:
             meson ninja-build pkg-config \
             libspa-0.2-dev libpipewire-0.3-dev \
             libbluetooth-dev liblc3-dev \
-            libsndfile1-dev libusb1.0-dev \
+            libsndfile1-dev libusb-1.0-0-dev \
             libvulkan-dev vulkan-tools \
             libx11-dev libxfixes-dev \
             libxrandr-dev libpulse-dev \
