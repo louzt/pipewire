@@ -33,7 +33,7 @@ jobs:
             libx11-dev libxfixes-dev \
             libxrandr-dev libpulse-dev \
             libdbus-1-dev libsystemd-dev \
-            libudev-dev librtkit0 \
+            libudev-dev \
             libavcodec-dev libavformat-dev libavutil-dev \
             gstreamer1.0-plugins-base gstreamer1.0-dev \
             python3-docutils python3-jinja2 \
