@@ -8,10 +8,10 @@ on:
 
 env:
   MESON_OPTIONS: >-
-    -Dbluez=enabled
-    -Dpipewire-jack=enabled
+    -Dbluez5=enabled
+    -Dpipewire-jack=disabled
     -Dlibjack-path=disabled
-    -Dtests=enabled
+    -Dtests=disabled
     -Dsession-managers=[]
 
 jobs:
